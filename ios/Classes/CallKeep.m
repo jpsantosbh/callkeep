@@ -176,6 +176,8 @@ static NSObject<CallKeepPushDelegate>* _delegate;
     // Store settings in NSUserDefault
     [[NSUserDefaults standardUserDefaults] setObject:settings forKey:@"CallKeepSettings"];
     [[NSUserDefaults standardUserDefaults] synchronize];
+
+    _delegate = self;
     
     [CallKeep initCallKitProvider];
     
@@ -183,6 +185,19 @@ static NSObject<CallKeepPushDelegate>* _delegate;
     [self.callKeepProvider setDelegate:self queue:nil];
     [self voipRegistration];
 }
+
+- (void)mapPushPayload:(NSDictionary* _Nonnull)payload withCompletion:(void (^)(NSDictionary* _Nullable))completion {
+    [self.eventChannel invokeMethod:CallKeepMapPushPayload arguments:payload result:^(id  _Nullable result) {
+        if ([result isKindOfClass:[NSDictionary class]]) {
+            // If the result is a NSDictionary, call the completion block with it
+            completion(result);
+        } else {
+            // Handle error or invalid type scenario, perhaps by calling completion with nil or an error
+            completion(nil);
+        }
+    }];
+}
+
 
 #pragma mark - PushKit
 
@@ -234,38 +249,72 @@ static NSObject<CallKeepPushDelegate>* _delegate;
     NSDictionary *dic = payload.dictionaryPayload;
     
     if (_delegate) {
-        dic = [_delegate mapPushPayload:dic];
-    }
+        NSLog(@"[With Delegate] Got here %@.", [dic description]);
+
+        [self mapPushPayload:dic withCompletion:^(NSDictionary* _Nullable mappedPayload) {
+            
+            if (!mappedPayload || mappedPayload[@"aps"] != nil) {
+                NSLog(@"Do not use the 'alert' format for push type %@.", payload.type);
+                if(completion != nil) {
+                    completion();
+                }
+                return;
+            }
     
-    if (!dic || dic[@"aps"] != nil) {
-        NSLog(@"Do not use the 'alert' format for push type %@.", payload.type);
-        if(completion != nil) {
-            completion();
+            NSString *uuid = mappedPayload[@"uuid"];
+            NSString *callerId = mappedPayload[@"caller_id"];
+            NSString *callerName = mappedPayload[@"caller_name"];
+            BOOL hasVideo = [mappedPayload[@"has_video"] boolValue];
+            NSString *callerIdType = mappedPayload[@"caller_id_type"];
+    
+    
+            if( uuid == nil) {
+                uuid = [self createUUID];
+            }
+    
+            NSLog(@"[With Delegate] Got here %@.", [mappedPayload description]);
+    
+            [CallKeep reportNewIncomingCall:uuid
+                handle:callerId
+                handleType:callerIdType
+                hasVideo:hasVideo
+                callerName:callerName
+                fromPushKit:YES
+                payload:dic
+                withCompletionHandler:completion];
+        }];
+    } else {
+    
+        if (!dic || dic[@"aps"] != nil) {
+            NSLog(@"Do not use the 'alert' format for push type %@.", payload.type);
+            if(completion != nil) {
+                completion();
+            }
+            return;
         }
-        return;
-    }
     
-    NSString *uuid = dic[@"uuid"];
-    NSString *callerId = dic[@"caller_id"];
-    NSString *callerName = dic[@"caller_name"];
-    BOOL hasVideo = [dic[@"has_video"] boolValue];
-    NSString *callerIdType = dic[@"caller_id_type"];
+        NSString *uuid = dic[@"uuid"];
+        NSString *callerId = dic[@"caller_id"];
+        NSString *callerName = dic[@"caller_name"];
+        BOOL hasVideo = [dic[@"has_video"] boolValue];
+        NSString *callerIdType = dic[@"caller_id_type"];
     
     
-    if( uuid == nil) {
-        uuid = [self createUUID];
-    }
+        if( uuid == nil) {
+            uuid = [self createUUID];
+        }
     
-    NSLog(@"Got here %@.", [dic description]);
+        NSLog(@"[No Delegate] Got here %@.", [dic description]);
     
-    [CallKeep reportNewIncomingCall:uuid
-                             handle:callerId
-                         handleType:callerIdType
-                           hasVideo:hasVideo
-                         callerName:callerName
-                        fromPushKit:YES
+        [CallKeep reportNewIncomingCall:uuid
+                            handle:callerId
+                            handleType:callerIdType
+                            hasVideo:hasVideo
+                            callerName:callerName
+                            fromPushKit:YES
                             payload:dic
-              withCompletionHandler:completion];
+                            withCompletionHandler:completion];
+    }
 }
 
 - (void)pushRegistry:(PKPushRegistry *)registry didReceiveIncomingPushWithPayload:(PKPushPayload *)payload forType:(NSString *)type {

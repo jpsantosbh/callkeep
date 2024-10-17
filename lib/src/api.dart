@@ -31,6 +31,8 @@ class FlutterCallkeep extends EventManager {
   static const MethodChannel _channel = MethodChannel('FlutterCallKeep.Method');
   static const MethodChannel _event = MethodChannel('FlutterCallKeep.Event');
   BuildContext? _context;
+  Map<dynamic, dynamic> Function(Map<dynamic, dynamic> payload)?
+      _mapPushPayload;
 
   Future<void> setup(
     BuildContext? context,
@@ -46,6 +48,8 @@ class FlutterCallkeep extends EventManager {
       return;
     }
     await _setupIOS(options['ios']);
+    _mapPushPayload = options['payloadMapper'];
+    print("### MapPushPayload: ${_mapPushPayload}");
   }
 
   Future<void> registerPhoneAccount() async {
@@ -462,7 +466,7 @@ class FlutterCallkeep extends EventManager {
     });
   }
 
-  Future<void> eventListener(MethodCall call) async {
+  Future<dynamic> eventListener(MethodCall call) async {
     print('[CallKeep] INFO: received event "${call.method}" ${call.arguments}');
     final data = call.arguments as Map<dynamic, dynamic>;
     switch (call.method) {
@@ -508,6 +512,13 @@ class FlutterCallkeep extends EventManager {
       case 'CallKeepPushKitToken':
         emit(CallKeepPushKitToken.fromMap(data));
         break;
+      case 'CallKeepMapPushPayload':
+        print("### Calling MapPushPayload: ${_mapPushPayload} ${data}");
+        final mapped = _mapPushPayload != null
+            ? _mapPushPayload!(data as Map<dynamic, dynamic>)
+            : data;
+        print("### Calling MapPushPayload: ${_mapPushPayload} ${mapped}");
+        return mapped;
     }
   }
 }

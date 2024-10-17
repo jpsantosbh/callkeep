@@ -4,7 +4,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @protocol CallKeepPushDelegate <NSObject>
 
-- (nullable NSDictionary*)mapPushPayload:(NSDictionary* _Nonnull)payload;
+- (void)mapPushPayload:(NSDictionary* _Nonnull)payload withCompletion:(void (^)(NSDictionary* _Nullable))completion;
 
 @optional
 - (void)onCallEvent:(NSString* _Nonnull)event withCallData:(NSDictionary* _Nonnull)callData;
